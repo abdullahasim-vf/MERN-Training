@@ -51,7 +51,7 @@ This is a full-stack web application that functions as a Learning Management Sys
 
 
 ```bash
-cd frontend (For Frontend)
+cd frontend #(For Frontend)
 npm run dev
 
 ---
