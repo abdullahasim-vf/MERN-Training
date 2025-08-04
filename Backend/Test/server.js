@@ -505,6 +505,30 @@ const swaggerOptions = {
         url: 'http://localhost:' + PORT,
       },
     ],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          description: 'JWT token for authentication'
+        },
+        sessionAuth: {
+          type: 'apiKey',
+          in: 'cookie',
+          name: 'connect.sid',
+          description: 'Session cookie for authentication'
+        }
+      }
+    },
+    security: [
+      {
+        bearerAuth: []
+      },
+      {
+        sessionAuth: []
+      }
+    ]
   },
   apis: ['./server.js'],
 };
@@ -548,14 +572,135 @@ const swaggerOptions = {
  *         role: student
  *         createdAt: 2023-01-01T00:00:00.000Z
  *         updatedAt: 2023-01-01T00:00:00.000Z
+ *     LoginRequest:
+ *       type: object
+ *       required:
+ *         - email
+ *         - password
+ *       properties:
+ *         email:
+ *           type: string
+ *           format: email
+ *           description: User's email address
+ *         password:
+ *           type: string
+ *           format: password
+ *           description: User's password
+ *       example:
+ *         email: john@example.com
+ *         password: password123
+ *     RegisterRequest:
+ *       type: object
+ *       required:
+ *         - name
+ *         - email
+ *         - password
+ *         - role
+ *       properties:
+ *         name:
+ *           type: string
+ *           description: User's full name
+ *         email:
+ *           type: string
+ *           format: email
+ *           description: User's email address
+ *         password:
+ *           type: string
+ *           format: password
+ *           description: User's password
+ *         role:
+ *           type: string
+ *           enum: [student, teacher]
+ *           description: User's role
+ *         age:
+ *           type: integer
+ *           description: User's age (optional)
+ *       example:
+ *         name: John Doe
+ *         email: john@example.com
+ *         password: password123
+ *         role: student
+ *         age: 25
+ *     LoginResponse:
+ *       type: object
+ *       properties:
+ *         message:
+ *           type: string
+ *           description: Success message
+ *         token:
+ *           type: string
+ *           description: JWT token for authentication
+ *       example:
+ *         message: Login successful
+ *         token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
  */
 
 /**
  * @swagger
+ * /login:
+ *   post:
+ *     summary: Authenticate user and get JWT token
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/LoginRequest'
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/LoginResponse'
+ *       400:
+ *         description: Invalid email or password
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *
+ * /register:
+ *   post:
+ *     summary: Register a new user
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/RegisterRequest'
+ *     responses:
+ *       201:
+ *         description: User registered successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *       400:
+ *         description: Validation error or email already registered
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *
  * /users:
  *   get:
  *     summary: Get all users
  *     tags: [User]
+ *     security:
+ *       - bearerAuth: []
+ *       - sessionAuth: []
  *     responses:
  *       200:
  *         description: List of users
@@ -565,9 +710,14 @@ const swaggerOptions = {
  *               type: array
  *               items:
  *                 $ref: '#/components/schemas/User'
+ *       401:
+ *         description: Authentication required
  *   post:
  *     summary: Create a new user
  *     tags: [User]
+ *     security:
+ *       - bearerAuth: []
+ *       - sessionAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -583,11 +733,16 @@ const swaggerOptions = {
  *               $ref: '#/components/schemas/User'
  *       400:
  *         description: Email must be unique
+ *       401:
+ *         description: Authentication required
  *
  * /users/{id}:
  *   get:
  *     summary: Get a user by ID
  *     tags: [User]
+ *     security:
+ *       - bearerAuth: []
+ *       - sessionAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -602,11 +757,16 @@ const swaggerOptions = {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/User'
+ *       401:
+ *         description: Authentication required
  *       404:
  *         description: User not found
  *   put:
  *     summary: Update a user by ID
  *     tags: [User]
+ *     security:
+ *       - bearerAuth: []
+ *       - sessionAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -629,11 +789,16 @@ const swaggerOptions = {
  *               $ref: '#/components/schemas/User'
  *       400:
  *         description: Email must be unique
+ *       401:
+ *         description: Authentication required
  *       404:
  *         description: User not found
  *   delete:
  *     summary: Delete a user by ID
  *     tags: [User]
+ *     security:
+ *       - bearerAuth: []
+ *       - sessionAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -651,6 +816,8 @@ const swaggerOptions = {
  *               properties:
  *                 message:
  *                   type: string
+ *       401:
+ *         description: Authentication required
  *       404:
  *         description: User not found
  */ 
@@ -662,6 +829,9 @@ const swaggerOptions = {
  *   get:
  *     summary: Get a student along with all enrolled courses
  *     tags: [Student]
+ *     security:
+ *       - bearerAuth: []
+ *       - sessionAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -683,6 +853,10 @@ const swaggerOptions = {
  *                   type: array
  *                   items:
  *                     $ref: '#/components/schemas/Course'
+ *       401:
+ *         description: Authentication required
+ *       403:
+ *         description: Forbidden - Student role required
  *       404:
  *         description: Student not found
  */
@@ -694,6 +868,9 @@ const swaggerOptions = {
  *   get:
  *     summary: Get a teacher along with all courses they teach
  *     tags: [Teacher]
+ *     security:
+ *       - bearerAuth: []
+ *       - sessionAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -715,6 +892,10 @@ const swaggerOptions = {
  *                   type: array
  *                   items:
  *                     $ref: '#/components/schemas/Course'
+ *       401:
+ *         description: Authentication required
+ *       403:
+ *         description: Forbidden - Teacher role required
  *       404:
  *         description: Teacher not found
  */
@@ -726,6 +907,9 @@ const swaggerOptions = {
  *   get:
  *     summary: Get a course with all student IDs enrolled and associated teacher information
  *     tags: [Course]
+ *     security:
+ *       - bearerAuth: []
+ *       - sessionAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -749,6 +933,8 @@ const swaggerOptions = {
  *                     $ref: '#/components/schemas/User'
  *                 teacher:
  *                   $ref: '#/components/schemas/User'
+ *       401:
+ *         description: Authentication required
  *       404:
  *         description: Course not found
  */
@@ -759,6 +945,9 @@ const swaggerOptions = {
  *   post:
  *     summary: Create a new course
  *     tags: [Course]
+ *     security:
+ *       - bearerAuth: []
+ *       - sessionAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -790,9 +979,14 @@ const swaggerOptions = {
  *               $ref: '#/components/schemas/Course'
  *       400:
  *         description: Invalid input or teacher/student not found
+ *       401:
+ *         description: Authentication required
  *   get:
  *     summary: Get all courses
  *     tags: [Course]
+ *     security:
+ *       - bearerAuth: []
+ *       - sessionAuth: []
  *     responses:
  *       200:
  *         description: List of courses
@@ -802,6 +996,8 @@ const swaggerOptions = {
  *               type: array
  *               items:
  *                 $ref: '#/components/schemas/Course'
+ *       401:
+ *         description: Authentication required
  */
 /**
  * @swagger
@@ -809,6 +1005,9 @@ const swaggerOptions = {
  *   put:
  *     summary: Update a course
  *     tags: [Course]
+ *     security:
+ *       - bearerAuth: []
+ *       - sessionAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -844,11 +1043,16 @@ const swaggerOptions = {
  *               $ref: '#/components/schemas/Course'
  *       400:
  *         description: Invalid input or teacher/student not found
+ *       401:
+ *         description: Authentication required
  *       404:
  *         description: Course not found
  *   delete:
  *     summary: Delete a course
  *     tags: [Course]
+ *     security:
+ *       - bearerAuth: []
+ *       - sessionAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -866,6 +1070,8 @@ const swaggerOptions = {
  *               properties:
  *                 message:
  *                   type: string
+ *       401:
+ *         description: Authentication required
  *       404:
  *         description: Course not found
  */
@@ -958,6 +1164,9 @@ const swaggerOptions = {
  *   get:
  *     summary: Get all enrollments
  *     tags: [Enrollment]
+ *     security:
+ *       - bearerAuth: []
+ *       - sessionAuth: []
  *     responses:
  *       200:
  *         description: List of enrollments
@@ -967,9 +1176,14 @@ const swaggerOptions = {
  *               type: array
  *               items:
  *                 $ref: '#/components/schemas/Enrollment'
+ *       401:
+ *         description: Authentication required
  *   post:
  *     summary: Create a new enrollment
  *     tags: [Enrollment]
+ *     security:
+ *       - bearerAuth: []
+ *       - sessionAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -1002,11 +1216,16 @@ const swaggerOptions = {
  *               properties:
  *                 error:
  *                   type: string
+ *       401:
+ *         description: Authentication required
  *
  * /enrollments/{id}:
  *   get:
  *     summary: Get an enrollment by ID
  *     tags: [Enrollment]
+ *     security:
+ *       - bearerAuth: []
+ *       - sessionAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -1021,11 +1240,16 @@ const swaggerOptions = {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/Enrollment'
+ *       401:
+ *         description: Authentication required
  *       404:
  *         description: Enrollment not found
  *   put:
  *     summary: Update an enrollment by ID
  *     tags: [Enrollment]
+ *     security:
+ *       - bearerAuth: []
+ *       - sessionAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -1055,11 +1279,16 @@ const swaggerOptions = {
  *               $ref: '#/components/schemas/Enrollment'
  *       400:
  *         description: Invalid input
+ *       401:
+ *         description: Authentication required
  *       404:
  *         description: Enrollment not found
  *   delete:
  *     summary: Delete an enrollment by ID
  *     tags: [Enrollment]
+ *     security:
+ *       - bearerAuth: []
+ *       - sessionAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -1077,6 +1306,8 @@ const swaggerOptions = {
  *               properties:
  *                 message:
  *                   type: string
+ *       401:
+ *         description: Authentication required
  *       404:
  *         description: Enrollment not found
  */
