@@ -1,58 +1,65 @@
-# 🎓 AI-Powered Learning Management System (LMS)
+# 🎓 Learning Management System (LMS)
 
-This is a full-stack web application that functions as a Learning Management System (LMS) with integrated role-based access (students and teachers), course management, and secure authentication.
+This is a full-stack web application that functions as a Learning Management System (LMS) with integrated role-based access (students and teachers), course management, enrollment system, and secure authentication.
 
 ---
 
 ## 🚀 Features
 
 - 🧑‍🏫 **User Roles** – Students and Teachers with different access levels
-- 📚 **Course Management** – Create, read, and manage courses
+- 📚 **Course Management** – Create, read, update, and delete courses
+- 🎯 **Enrollment System** – Students can enroll in courses, teachers can manage enrollments
 - 🔒 **Secure Authentication** – Login, registration, and password reset via email
-- 📦 **Modular Codebase** – Clean and scalable project structure
-- 📧 **Email Support** – Integrated with Gmail/Microsoft using nodemailer and app passwords
+- 📧 **Email Support** – Integrated with Gmail/Microsoft using nodemailer
+- 📊 **Student Dashboard** – View enrolled courses
+- 👩‍🏫 **Teacher Dashboard** – Manage taught courses and student enrollments
+- 📝 **Swagger API Documentation** – Comprehensive API documentation
+- 🛡️ **Security Features** – Rate limiting, XSS protection, data sanitization
 
 ---
 
 ## 🧠 Tech Stack
 
 ### 🔗 Backend
-- **Node.js & Express**
-- **MongoDB + Mongoose**
+- **Node.js & Express** – Server framework
+- **MongoDB + Mongoose** – Database and ORM
 - **JWT** – Token-based authentication
 - **Nodemailer** – Email support
-- **Dotenv** – Secure environment variable handling
-
+- **Swagger** – API documentation
+- **Dotenv** – Environment variable management
+- **CORS** – Cross-origin resource sharing
+- **XSS-Clean** – XSS protection
+- **Express Rate Limit** – Request throttling
 
 ### 🖼️ Frontend
-- **React.js** – For displaying UI
-
----
-
+- **React.js** – Frontend framework
+- **Vite** – Frontend build tool
+- **React Router** – Client-side routing
 
 ---
 
 ## 🛠️ Setup & Installation
 
 ### ✅ Prerequisites
-- Node.js + npm
+- Node.js (v16+) + npm/yarn
 - MongoDB (local or Atlas)
 - Gmail/Microsoft account with App Password enabled
 
 ---
 
-### 🔧 Backend Setup (Node.js)
-
-```bash
-cd Backened/Test
-nodemon server.js
-
----
-
-**### 🔧 Frontend Setup (Node.js)**
-
+### 🔧 Frontend Setup
 ```bash
 cd frontend
 npm run dev
+
+---
+
+### 🔧 Backend Setup
+
+```bash
+cd Backend/Test
+nodemon server.js
+
+---
 
 
