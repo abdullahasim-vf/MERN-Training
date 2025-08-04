@@ -48,6 +48,7 @@ This is a full-stack web application that functions as a Learning Management Sys
 ---
 
 ### 🔧 Setup
+---
 
 #Frontend Setup
 ```bash
