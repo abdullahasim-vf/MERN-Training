@@ -47,14 +47,16 @@ This is a full-stack web application that functions as a Learning Management Sys
 
 ---
 
-### 🔧 Frontend Setup
+### 🔧 Setup
+
+### Frontend Setup
 ```bash
 cd frontend
 npm run dev
 
 ---
 
-### 🔧 Backend Setup
+###  Backend Setup
 
 ```bash
 cd Backend/Test
