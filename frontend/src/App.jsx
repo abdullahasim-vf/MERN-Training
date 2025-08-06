@@ -1,33 +1,73 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Login from './components/Login';
 import Register from './components/Register';
-import Home from './components/Home';
+import ForgotPassword from './components/ForgotPassword';
+import ResetPassword from './components/ResetPassword';
+import TeacherHome from './components/TeacherHome';
+import StudentHome from './components/StudentHome';
+import EnrollmentRequests from './components/EnrollmentRequests';
+import CourseStudents from './components/CourseStudents'; 
 import useAuthStore from './store/authStore';
 import './index.css';
 
-const AppContent = () => {
-  const { isAuthenticated } = useAuthStore();
-  const location = useLocation();
+const ProtectedRoute = ({ children, role }) => {
+  const { isAuthenticated, user } = useAuthStore();
 
-  if (location.pathname === '/home' && isAuthenticated) {
-    return <Home />;
+  if (!isAuthenticated) {
+    return <Navigate to="/" replace />;
   }
 
-  if (location.pathname === '/register' && !isAuthenticated) {
-    return <Register />;
+  if (role && user?.role !== role) {
+    return <Navigate to="/" replace />;
   }
 
-  return <Login />;
+  return children;
 };
 
 function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<AppContent />} />
-        <Route path="/home" element={<AppContent />} />
-        <Route path="/register" element={<AppContent />} />
+        {/* Public Routes */}
+        <Route path="/" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+
+        {/* Protected Routes */}
+        <Route
+          path="/teacher-home"
+          element={
+            <ProtectedRoute role="teacher">
+              <TeacherHome />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/student-home"
+          element={
+            <ProtectedRoute role="student">
+              <StudentHome />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/teacher-requests"
+          element={
+            <ProtectedRoute role="teacher">
+              <EnrollmentRequests />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/course-students"
+          element={
+            <ProtectedRoute role="teacher">
+              <CourseStudents />
+            </ProtectedRoute>
+          }
+        />
       </Routes>
     </Router>
   );

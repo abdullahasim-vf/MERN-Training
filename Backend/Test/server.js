@@ -13,6 +13,7 @@ require('dotenv').config();
 const nodemailer = require('nodemailer');
 
 
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -27,7 +28,7 @@ app.use(session({
   secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
-  cookie: { httpOnly: true, secure: false },
+  cookie: { httpOnly: true, secure: false, maxAge: 60 * 60 * 1000 }, // 1 hour
 }));
  
 app.use((req, res, next) => {
@@ -37,8 +38,8 @@ app.use((req, res, next) => {
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
-  message: "Too many requests, please try again later."
+  max: 100,
+  message: { error: "Too many requests, please try again later." } // <-- return JSON
 });
 app.use(limiter);
 
@@ -80,6 +81,14 @@ const enrollmentSchema = new mongoose.Schema({
 
 const Enrollment = mongoose.model('Enrollment', enrollmentSchema);
 
+const enrollmentRequestSchema = new mongoose.Schema({
+  course: { type: mongoose.Schema.Types.ObjectId, ref: 'Course', required: true },
+  student: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
+  createdAt: { type: Date, default: Date.now }
+});
+const EnrollmentRequest = mongoose.model('EnrollmentRequest', enrollmentRequestSchema);
+
 const JWT_SECRET = process.env.JWT_SECRET;
 
 
@@ -118,7 +127,21 @@ function authorize(roles = []) {
 app.post('/login', async (req, res, next) => {
   try {
     const { email, password } = req.body;
-    const user = await User.findOne({ email });
+    
+    // Input validation
+    if (!email || !email.trim()) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+    if (!password) {
+      return res.status(400).json({ error: 'Password is required' });
+    }
+    
+    // Email format validation
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: 'Please enter a valid email address' });
+    }
+    
+    const user = await User.findOne({ email: email.trim() });
     if (!user || !user.password) {
       return res.status(400).json({ error: 'Invalid email or password' });
     }
@@ -132,7 +155,18 @@ app.post('/login', async (req, res, next) => {
     // Session
     req.session.userId = user._id;
     req.session.role = user.role;
-    res.json({ message: 'Login successful', token });
+    // Send user info in response
+    res.json({
+      message: 'Login successful',
+      token,
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        age: user.age
+      }
+    });
   } catch (err) {
     next(err);
   }
@@ -142,15 +176,78 @@ app.post('/login', async (req, res, next) => {
 app.post('/register', async (req, res, next) => {
   try {
     const { name, email, password, role, age } = req.body;
-    if (!name || !email || !password || !role) {
-      return res.status(400).json({ error: 'Name, email, password, and role are required' });
+    
+    // Server-side validation
+    const errors = {};
+    
+    // Name validation
+    if (!name || !name.trim()) {
+      errors.name = 'Name is required';
+    } else if (!/^[a-zA-Z\s]+$/.test(name.trim())) {
+      errors.name = 'Name should only contain alphabets and spaces';
+    } else if (name.trim().length < 2) {
+      errors.name = 'Name should be at least 2 characters long';
+    } else if (name.trim().length > 50) {
+      errors.name = 'Name should not exceed 50 characters';
     }
+    
+    // Email validation
+    if (!email || !email.trim()) {
+      errors.email = 'Email is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      errors.email = 'Please enter a valid email address';
+    } else if (email.length > 100) {
+      errors.email = 'Email should not exceed 100 characters';
+    }
+    
+    // Password validation
+    if (!password) {
+      errors.password = 'Password is required';
+    } else if (password.length < 8) {
+      errors.password = 'Password must be at least 8 characters long';
+    } else if (!/(?=.*[a-z])/.test(password)) {
+      errors.password = 'Password must contain at least one lowercase letter';
+    } else if (!/(?=.*[A-Z])/.test(password)) {
+      errors.password = 'Password must contain at least one uppercase letter';
+    } else if (!/(?=.*\d)/.test(password)) {
+      errors.password = 'Password must contain at least one number';
+    } else if (!/(?=.*[@$!%*?&])/.test(password)) {
+      errors.password = 'Password must contain at least one special character (@$!%*?&)';
+    } else if (password.length > 128) {
+      errors.password = 'Password should not exceed 128 characters';
+    }
+    
+    // Role validation
+    if (!role) {
+      errors.role = 'Role is required';
+    } else if (!['student', 'teacher'].includes(role)) {
+      errors.role = 'Please select a valid role';
+    }
+    
+    // Age validation
+    if (!age) {
+      errors.age = 'Age is required';
+    } else if (isNaN(age) || age < 1) {
+      errors.age = 'Age must be a positive number';
+    } else if (age > 120) {
+      errors.age = 'Age must be between 1 and 120';
+    } else if (!Number.isInteger(Number(age))) {
+      errors.age = 'Age must be a whole number';
+    }
+    
+    // Check for validation errors
+    if (Object.keys(errors).length > 0) {
+      return res.status(400).json({ error: Object.values(errors)[0] });
+    }
+    
+    // Check if user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({ error: 'Email already registered' });
     }
+    
     const hashedPassword = await bcrypt.hash(password, 10);
-    const user = new User({ name, email, password: hashedPassword, role, age });
+    const user = new User({ name: name.trim(), email: email.trim(), password: hashedPassword, role, age: parseInt(age) });
     await user.save();
     res.status(201).json({ message: 'User registered successfully' });
   } catch (err) {
@@ -158,15 +255,57 @@ app.post('/register', async (req, res, next) => {
   }
 });
 
+// Logout endpoint
+app.post('/logout', (req, res) => {
+  res.clearCookie('token');
+  req.session.destroy(() => {
+    res.json({ message: 'Logged out successfully' });
+  });
+});
+
 
 app.post('/users', async (req, res, next) => {
   try {
+    const { name, email, password, role, age } = req.body;
+    
+    // Basic validation
+    if (!name || !email || !password || !role) {
+      return res.status(400).json({ error: 'Name, email, password, and role are required' });
+    }
+    
+    // Email format validation
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: 'Please enter a valid email address' });
+    }
+    
+    // Password validation
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters long' });
+    }
+    
+    // Role validation
+    if (!['student', 'teacher'].includes(role)) {
+      return res.status(400).json({ error: 'Role must be either student or teacher' });
+    }
+    
+    // Age validation
+    if (age && (age < 1 || age > 120)) {
+      return res.status(400).json({ error: 'Age must be between 1 and 120' });
+    }
 
-    const existingUser = await User.findOne({ email: req.body.email });
+    const existingUser = await User.findOne({ email: email.trim() });
     if (existingUser) {
       return res.status(400).json({ error: 'Email must be unique' });
     }
-    const user = new User(req.body);
+    
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = new User({ 
+      name: name.trim(), 
+      email: email.trim(), 
+      password: hashedPassword, 
+      role, 
+      age: age ? parseInt(age) : undefined 
+    });
     await user.save();
     res.status(201).json(user);
   } catch (err) {
@@ -211,9 +350,24 @@ app.put('/users/:id', async (req, res, next) => {
 
 app.delete('/users/:id', async (req, res, next) => {
   try {
-    const user = await User.findByIdAndDelete(req.params.id);
-    if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json({ message: 'User deleted' });
+    await Enrollment.deleteMany({ student: req.params.id });
+
+    const user = await User.findById(req.params.id);
+    if (user && user.role === 'teacher') {
+      await Course.updateMany(
+        { teacher: req.params.id },
+        { $set: { teacher: null } }
+      );
+    }
+
+    const deletedUser = await User.findByIdAndDelete(req.params.id);
+    
+    if (!deletedUser) return res.status(404).json({ error: 'User not found' });
+    
+    res.json({ 
+      message: 'User deleted successfully. Teacher courses unassigned if applicable.',
+      deletedUser
+    });
   } catch (err) {
     next(err);
   }
@@ -224,7 +378,8 @@ app.get('/students/:id/courses', authenticate, authorize(['student']), async (re
     const student = await User.findOne({ _id: req.params.id, role: 'student' });
     if (!student) return res.status(404).json({ error: 'Student not found' });
     const enrollments = await Enrollment.find({ student: student._id });
-    const courses = await Course.find({ _id: { $in: enrollments.map(e => e.course) } });
+    // FIX: Populate teacher field
+    const courses = await Course.find({ _id: { $in: enrollments.map(e => e.course) } }).populate('teacher', 'name email');
     res.json({ student, courses });
   } catch (err) {
     next(err);
@@ -429,7 +584,18 @@ app.delete('/enrollments/:id', async (req, res, next) => {
 app.post('/forgot-password', async (req, res, next) => {
   try {
     const { email } = req.body;
-    const user = await User.findOne({ email });
+    
+    // Input validation
+    if (!email || !email.trim()) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+    
+    // Email format validation
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: 'Please enter a valid email address' });
+    }
+    
+    const user = await User.findOne({ email: email.trim() });
     if (!user) {
       return res.status(400).json({ error: 'No user with that email' });
     }
@@ -438,8 +604,8 @@ app.post('/forgot-password', async (req, res, next) => {
     user.resetPasswordToken = resetToken;
     user.resetPasswordExpires = Date.now() + 15 * 60 * 1000;
     await user.save();
-    // Send email
-    const resetUrl = `${req.protocol}://${req.get('host')}/reset-password?token=${resetToken}`;
+    // Send email with frontend URL
+    const resetUrl = `http://localhost:5173/reset-password?token=${resetToken}`;
     await transporter.sendMail({
       to: user.email,
       subject: 'Password Reset',
@@ -458,6 +624,27 @@ app.post('/reset-password', async (req, res, next) => {
     if (!token || !newPassword) {
       return res.status(400).json({ error: 'Token and new password are required' });
     }
+    
+    // Password validation
+    if (newPassword.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters long' });
+    }
+    if (!/(?=.*[a-z])/.test(newPassword)) {
+      return res.status(400).json({ error: 'Password must contain at least one lowercase letter' });
+    }
+    if (!/(?=.*[A-Z])/.test(newPassword)) {
+      return res.status(400).json({ error: 'Password must contain at least one uppercase letter' });
+    }
+    if (!/(?=.*\d)/.test(newPassword)) {
+      return res.status(400).json({ error: 'Password must contain at least one number' });
+    }
+    if (!/(?=.*[@$!%*?&])/.test(newPassword)) {
+      return res.status(400).json({ error: 'Password must contain at least one special character (@$!%*?&)' });
+    }
+    if (newPassword.length > 128) {
+      return res.status(400).json({ error: 'Password should not exceed 128 characters' });
+    }
+    
     let payload;
     try {
       payload = jwt.verify(token, JWT_SECRET);
@@ -1382,4 +1569,108 @@ const swaggerOptions = {
 
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+app.get('/students/:id/available-courses', authenticate, authorize(['student']), async (req, res, next) => {
+  try {
+    const enrolled = await Enrollment.find({ student: req.params.id }).select('course');
+    const enrolledIds = enrolled.map(e => e.course);
+    const courses = await Course.find({ _id: { $nin: enrolledIds } }).populate('teacher', 'name email');
+    res.json({ courses });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post('/enrollment-requests', authenticate, authorize(['student']), async (req, res, next) => {
+  try {
+    const { course } = req.body;
+    const student = req.user.id;
+    const exists = await EnrollmentRequest.findOne({ course, student, status: 'pending' });
+    if (exists) return res.status(400).json({ error: 'Already requested for this course' });
+    const alreadyEnrolled = await Enrollment.findOne({ course, student });
+    if (alreadyEnrolled) return res.status(400).json({ error: 'Already enrolled in this course' });
+    const request = new EnrollmentRequest({ course, student });
+    await request.save();
+    res.status(201).json(request);
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get('/teachers/:id/enrollment-requests', authenticate, authorize(['teacher']), async (req, res, next) => {
+  try {
+    const courses = await Course.find({ teacher: req.params.id }).select('_id');
+    const requests = await EnrollmentRequest.find({ course: { $in: courses.map(c => c._id) }, status: 'pending' })
+      .populate('student', 'name email age')
+      .populate('course', 'name description');
+    res.json({ requests });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post('/enrollment-requests/:id/decision', authenticate, authorize(['teacher']), async (req, res, next) => {
+  try {
+    const { decision } = req.body; // 'approved' or 'rejected'
+    const request = await EnrollmentRequest.findById(req.params.id).populate('course');
+    if (!request) return res.status(404).json({ error: 'Request not found' });
+    // Only teacher of the course can decide
+    if (request.course.teacher.toString() !== req.user.id) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+    request.status = decision;
+    await request.save();
+    if (decision === 'approved') {
+      // Create enrollment
+      const exists = await Enrollment.findOne({ course: request.course._id, student: request.student });
+      if (!exists) {
+        const enrollment = new Enrollment({ course: request.course._id, student: request.student });
+        await enrollment.save();
+      }
+    }
+    res.json({ message: `Request ${decision}` });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.delete('/courses/:courseId/students/:studentId', authenticate, authorize(['teacher']), async (req, res, next) => {
+  try {
+    const course = await Course.findById(req.params.courseId);
+    if (!course) return res.status(404).json({ error: 'Course not found' });
+    if (course.teacher.toString() !== req.user.id) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+    await Enrollment.deleteOne({ course: req.params.courseId, student: req.params.studentId });
+    res.json({ message: 'Student removed from course' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get('/courses/:id/students', authenticate, authorize(['teacher']), async (req, res, next) => {
+  try {
+    const course = await Course.findById(req.params.id);
+    if (!course) return res.status(404).json({ error: 'Course not found' });
+    if (course.teacher.toString() !== req.user.id) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+    const enrollments = await Enrollment.find({ course: course._id }).populate('student', 'name email age');
+    res.json({ students: enrollments.map(e => e.student) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get('/enrollment-requests', authenticate, authorize(['student']), async (req, res, next) => {
+  try {
+    const studentId = req.query.student || req.user.id;
+    const requests = await EnrollmentRequest.find({ student: studentId });
+    res.json({ requests });
+  } catch (err) {
+    next(err);
+  }
+});
+
+
 
