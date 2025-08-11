@@ -155,7 +155,6 @@ app.post('/login', async (req, res, next) => {
     // Session
     req.session.userId = user._id;
     req.session.role = user.role;
-    // Send user info in response
     res.json({
       message: 'Login successful',
       token,
@@ -378,7 +377,6 @@ app.get('/students/:id/courses', authenticate, authorize(['student']), async (re
     const student = await User.findOne({ _id: req.params.id, role: 'student' });
     if (!student) return res.status(404).json({ error: 'Student not found' });
     const enrollments = await Enrollment.find({ student: student._id });
-    // FIX: Populate teacher field
     const courses = await Course.find({ _id: { $in: enrollments.map(e => e.course) } }).populate('teacher', 'name email');
     res.json({ student, courses });
   } catch (err) {
@@ -418,7 +416,6 @@ app.get('/courses/:id/details', async (req, res, next) => {
     next(err);
   }
 });
-// authenticate, authorize(['teacher', 'student']),
 app.post('/courses', async (req, res, next) => {
   try {
     const { name, description, teacher, students } = req.body;
@@ -484,12 +481,11 @@ app.delete('/courses/:id', async (req, res, next) => {
   }
 });
 
-// NodeMailer transporter setup
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
-    user: process.env.EMAIL_USER,  // your Gmail address
-    pass: process.env.EMAIL_PASS,  // app password (not account password)
+    user: process.env.EMAIL_USER, 
+    pass: process.env.EMAIL_PASS,  
   },
 });
 
@@ -578,6 +574,106 @@ app.delete('/enrollments/:id', async (req, res, next) => {
   }
 });
 
+app.get('/students/:id/available-courses', authenticate, authorize(['student']), async (req, res, next) => {
+  try {
+    const enrolled = await Enrollment.find({ student: req.params.id }).select('course');
+    const enrolledIds = enrolled.map(e => e.course);
+    const courses = await Course.find({ _id: { $nin: enrolledIds } }).populate('teacher', 'name email');
+    res.json({ courses });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post('/enrollment-requests', authenticate, authorize(['student']), async (req, res, next) => {
+  try {
+    const { course } = req.body;
+    const student = req.user.id;
+    const exists = await EnrollmentRequest.findOne({ course, student, status: 'pending' });
+    if (exists) return res.status(400).json({ error: 'Already requested for this course' });
+    const alreadyEnrolled = await Enrollment.findOne({ course, student });
+    if (alreadyEnrolled) return res.status(400).json({ error: 'Already enrolled in this course' });
+    const request = new EnrollmentRequest({ course, student });
+    await request.save();
+    res.status(201).json(request);
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get('/teachers/:id/enrollment-requests', authenticate, authorize(['teacher']), async (req, res, next) => {
+  try {
+    const courses = await Course.find({ teacher: req.params.id }).select('_id');
+    const requests = await EnrollmentRequest.find({ course: { $in: courses.map(c => c._id) }, status: 'pending' })
+      .populate('student', 'name email age')
+      .populate('course', 'name description');
+    res.json({ requests });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post('/enrollment-requests/:id/decision', authenticate, authorize(['teacher']), async (req, res, next) => {
+  try {
+    const { decision } = req.body; 
+    const request = await EnrollmentRequest.findById(req.params.id).populate('course');
+    if (!request) return res.status(404).json({ error: 'Request not found' });
+    if (request.course.teacher.toString() !== req.user.id) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+    request.status = decision;
+    await request.save();
+    if (decision === 'approved') {
+      const exists = await Enrollment.findOne({ course: request.course._id, student: request.student });
+      if (!exists) {
+        const enrollment = new Enrollment({ course: request.course._id, student: request.student });
+        await enrollment.save();
+      }
+    }
+    res.json({ message: `Request ${decision}` });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.delete('/courses/:courseId/students/:studentId', authenticate, authorize(['teacher']), async (req, res, next) => {
+  try {
+    const course = await Course.findById(req.params.courseId);
+    if (!course) return res.status(404).json({ error: 'Course not found' });
+    if (course.teacher.toString() !== req.user.id) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+    await Enrollment.deleteOne({ course: req.params.courseId, student: req.params.studentId });
+    res.json({ message: 'Student removed from course' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get('/courses/:id/students', authenticate, authorize(['teacher']), async (req, res, next) => {
+  try {
+    const course = await Course.findById(req.params.id);
+    if (!course) return res.status(404).json({ error: 'Course not found' });
+    if (course.teacher.toString() !== req.user.id) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+    const enrollments = await Enrollment.find({ course: course._id }).populate('student', 'name email age');
+    res.json({ students: enrollments.map(e => e.student) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get('/enrollment-requests', authenticate, authorize(['student']), async (req, res, next) => {
+  try {
+    const studentId = req.query.student || req.user.id;
+    const requests = await EnrollmentRequest.find({ student: studentId });
+    res.json({ requests });
+  } catch (err) {
+    next(err);
+  }
+});
+
 
 
 // Forgot Password endpoint
@@ -585,12 +681,10 @@ app.post('/forgot-password', async (req, res, next) => {
   try {
     const { email } = req.body;
     
-    // Input validation
     if (!email || !email.trim()) {
       return res.status(400).json({ error: 'Email is required' });
     }
     
-    // Email format validation
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(400).json({ error: 'Please enter a valid email address' });
     }
@@ -604,7 +698,6 @@ app.post('/forgot-password', async (req, res, next) => {
     user.resetPasswordToken = resetToken;
     user.resetPasswordExpires = Date.now() + 15 * 60 * 1000;
     await user.save();
-    // Send email with frontend URL
     const resetUrl = `http://localhost:5173/reset-password?token=${resetToken}`;
     await transporter.sendMail({
       to: user.email,
@@ -625,7 +718,6 @@ app.post('/reset-password', async (req, res, next) => {
       return res.status(400).json({ error: 'Token and new password are required' });
     }
     
-    // Password validation
     if (newPassword.length < 8) {
       return res.status(400).json({ error: 'Password must be at least 8 characters long' });
     }
@@ -1570,107 +1662,7 @@ const swaggerOptions = {
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-app.get('/students/:id/available-courses', authenticate, authorize(['student']), async (req, res, next) => {
-  try {
-    const enrolled = await Enrollment.find({ student: req.params.id }).select('course');
-    const enrolledIds = enrolled.map(e => e.course);
-    const courses = await Course.find({ _id: { $nin: enrolledIds } }).populate('teacher', 'name email');
-    res.json({ courses });
-  } catch (err) {
-    next(err);
-  }
-});
 
-app.post('/enrollment-requests', authenticate, authorize(['student']), async (req, res, next) => {
-  try {
-    const { course } = req.body;
-    const student = req.user.id;
-    const exists = await EnrollmentRequest.findOne({ course, student, status: 'pending' });
-    if (exists) return res.status(400).json({ error: 'Already requested for this course' });
-    const alreadyEnrolled = await Enrollment.findOne({ course, student });
-    if (alreadyEnrolled) return res.status(400).json({ error: 'Already enrolled in this course' });
-    const request = new EnrollmentRequest({ course, student });
-    await request.save();
-    res.status(201).json(request);
-  } catch (err) {
-    next(err);
-  }
-});
-
-app.get('/teachers/:id/enrollment-requests', authenticate, authorize(['teacher']), async (req, res, next) => {
-  try {
-    const courses = await Course.find({ teacher: req.params.id }).select('_id');
-    const requests = await EnrollmentRequest.find({ course: { $in: courses.map(c => c._id) }, status: 'pending' })
-      .populate('student', 'name email age')
-      .populate('course', 'name description');
-    res.json({ requests });
-  } catch (err) {
-    next(err);
-  }
-});
-
-app.post('/enrollment-requests/:id/decision', authenticate, authorize(['teacher']), async (req, res, next) => {
-  try {
-    const { decision } = req.body; // 'approved' or 'rejected'
-    const request = await EnrollmentRequest.findById(req.params.id).populate('course');
-    if (!request) return res.status(404).json({ error: 'Request not found' });
-    // Only teacher of the course can decide
-    if (request.course.teacher.toString() !== req.user.id) {
-      return res.status(403).json({ error: 'Not authorized' });
-    }
-    request.status = decision;
-    await request.save();
-    if (decision === 'approved') {
-      // Create enrollment
-      const exists = await Enrollment.findOne({ course: request.course._id, student: request.student });
-      if (!exists) {
-        const enrollment = new Enrollment({ course: request.course._id, student: request.student });
-        await enrollment.save();
-      }
-    }
-    res.json({ message: `Request ${decision}` });
-  } catch (err) {
-    next(err);
-  }
-});
-
-app.delete('/courses/:courseId/students/:studentId', authenticate, authorize(['teacher']), async (req, res, next) => {
-  try {
-    const course = await Course.findById(req.params.courseId);
-    if (!course) return res.status(404).json({ error: 'Course not found' });
-    if (course.teacher.toString() !== req.user.id) {
-      return res.status(403).json({ error: 'Not authorized' });
-    }
-    await Enrollment.deleteOne({ course: req.params.courseId, student: req.params.studentId });
-    res.json({ message: 'Student removed from course' });
-  } catch (err) {
-    next(err);
-  }
-});
-
-app.get('/courses/:id/students', authenticate, authorize(['teacher']), async (req, res, next) => {
-  try {
-    const course = await Course.findById(req.params.id);
-    if (!course) return res.status(404).json({ error: 'Course not found' });
-    if (course.teacher.toString() !== req.user.id) {
-      return res.status(403).json({ error: 'Not authorized' });
-    }
-    const enrollments = await Enrollment.find({ course: course._id }).populate('student', 'name email age');
-    res.json({ students: enrollments.map(e => e.student) });
-  } catch (err) {
-    next(err);
-  }
-});
-
-app.get('/enrollment-requests', authenticate, authorize(['student']), async (req, res, next) => {
-  try {
-    const studentId = req.query.student || req.user.id;
-    const requests = await EnrollmentRequest.find({ student: studentId });
-    res.json({ requests });
-  } catch (err) {
-    next(err);
-  }
-});
 
 
 

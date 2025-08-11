@@ -8,6 +8,7 @@ import TeacherHome from './components/TeacherHome';
 import StudentHome from './components/StudentHome';
 import EnrollmentRequests from './components/EnrollmentRequests';
 import CourseStudents from './components/CourseStudents'; 
+import Profile from './components/Profile';
 import useAuthStore from './store/authStore';
 import './index.css';
 
@@ -67,6 +68,14 @@ function App() {
               <CourseStudents />
             </ProtectedRoute>
           }
+        />
+        <Route 
+          path="/profile" 
+          element={
+            <ProtectedRoute>
+              <Profile />
+            </ProtectedRoute>
+          } 
         />
       </Routes>
     </Router>

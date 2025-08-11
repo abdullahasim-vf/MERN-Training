@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
 import CourseStudents from './CourseStudents';
 import EnrollmentRequests from './EnrollmentRequests';
@@ -57,6 +57,13 @@ const TeacherHome = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-900 via-pink-900 to-purple-900 px-4">
       <div className="max-w-4xl w-full mt-5 mb-5 space-y-8 backdrop-blur-xl bg-white/10 border border-white/20 rounded-3xl shadow-2xl p-8">
+        <div className="flex justify-end mb-2">
+          <Link to="/profile" title="Profile">
+            <svg className="h-10 w-10 text-white hover:text-pink-300 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A9 9 0 1112 21a9 9 0 01-6.879-3.196zM15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </Link>
+        </div>
         <div className="text-center space-y-4">
           <div className="mx-auto h-20 w-20 bg-gradient-to-r from-purple-400 via-pink-500 to-red-500 rounded-full flex items-center justify-center shadow-lg">
             <svg className="h-10 w-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -64,7 +71,7 @@ const TeacherHome = () => {
             </svg>
           </div>
           <h2 className="text-3xl font-bold text-white">Teacher Dashboard</h2>
-          <p className="text-pink-200 text-sm">Welcome, {user?.name || 'Teacher'}!</p>
+          <p className="text-pink-200 text-3xl">Welcome, {user?.name || 'Teacher'}!</p>
         </div>
         <div className="bg-white/10 border border-white/20 rounded-xl p-6 space-y-2 text-white mb-8">
           <div><span className="font-semibold">Name:</span> {user?.name}</div>
@@ -93,8 +100,8 @@ const TeacherHome = () => {
                 <li key={course._id} className="bg-white/10 rounded-lg p-4 border border-white/10">
                   <div className="font-bold text-white text-lg">{course.name}</div>
                   <div className="text-pink-200 text-sm">{course.description}</div>
-                  <div className="text-pink-100 text-sm">
-                    Enrolled Students: <span className="font-semibold">{course.enrolledCount}</span>
+                  <div className="text-pink-100 text-sm font-bold">
+                    Enrolled Students: <span className="font-bold">{course.enrolledCount}</span>
                   </div>
                   {selectedCourse === course._id ? (
                     <button

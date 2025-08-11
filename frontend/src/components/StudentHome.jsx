@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate,Link } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
 
 const StudentHome = () => {
@@ -101,11 +101,22 @@ const StudentHome = () => {
         <div className="absolute top-0 -right-4 w-72 h-72 bg-yellow-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-2000"></div>
         <div className="absolute -bottom-8 left-20 w-72 h-72 bg-pink-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-4000"></div>
       </div>
+      <div className="flex justify-between items-center mb-4">
+  <div></div>
+  
+</div>
 
       <div className="relative z-10 flex items-center justify-center min-h-screen px-4">
         <div className="w-full max-w-4xl">
           {/* Glass Morphism Card */}
           <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-3xl shadow-2xl p-8 space-y-8 mt-5 mb-5">
+            <div className="flex justify-end mb-2">
+              <Link to="/profile" title="Profile">
+                <svg className="h-10 w-10 text-white hover:text-pink-300 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A9 9 0 1112 21a9 9 0 01-6.879-3.196zM15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </Link>
+            </div>
             {/* Header */}
             <div className="text-center space-y-4">
               <div className="relative mx-auto w-24 h-24">
@@ -117,13 +128,21 @@ const StudentHome = () => {
                 <div className="absolute inset-0 bg-gradient-to-r from-purple-400 via-pink-500 to-red-500 rounded-full blur-lg opacity-50 animate-pulse"></div>
               </div>
               <div className="space-y-2">
-                <h2 className="text-4xl font-bold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
-                  Welcome, Student
+                <h2 className="text-3xl font-bold text-white">
+                  Student Dashboard
                 </h2>
-                <p className="text-purple-200 text-sm font-medium">
-                  {user?.name} ({user?.email})
+                <p className="text-purple-200 text-3xl ">
+                  Welcome, {user?.name}!
                 </p>
               </div>
+            </div>
+
+            {/* Student Info Section */}
+            <div className="bg-white/10 border border-white/20 rounded-xl p-6 space-y-2 text-white mb-8">
+              <div><span className="font-semibold">Name:</span> {user?.name}</div>
+              <div><span className="font-semibold">Email:</span> {user?.email}</div>
+              <div><span className="font-semibold">Role:</span> {user?.role}</div>
+              <div><span className="font-semibold">Age:</span> {user?.age}</div>
             </div>
 
             {/* Student Dashboard Content */}
@@ -139,7 +158,7 @@ const StudentHome = () => {
                     {courses.map(course => (
                       <li key={course._id} className="bg-white/10 rounded-lg p-4 border border-white/10">
                         <div className="font-bold text-white text-lg">{course.name}</div>
-                        <div className="text-purple-200 text-sm">
+                        <div className="text-purple-200 text-sm font-bold">
                           Teacher: {course.teacher ? course.teacher.name || course.teacher : 'N/A'}
                         </div>
                         <div className="text-purple-100 text-sm">{course.description}</div>
